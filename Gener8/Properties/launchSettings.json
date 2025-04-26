@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Gener8": {
+      "commandName": "Project",
+      "commandLineArgs": "cp"
+    }
+  }
+}
