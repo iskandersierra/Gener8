@@ -2,6 +2,13 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>gener8</ToolCommandName>
+    <PackageOutputPath>./.nupkg</PackageOutputPath>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Gener8.Commands\Gener8.Commands.csproj" />
+  </ItemGroup>
 
 </Project>
