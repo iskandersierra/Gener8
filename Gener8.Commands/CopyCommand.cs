@@ -1,6 +1,6 @@
-﻿using System;
+﻿using System.Diagnostics;
+using CommunityToolkit.Diagnostics;
 using Gener8.Core;
-using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -29,7 +29,7 @@ public static class CopyCommand
 
             if (request.Verbose)
             {
-                WriteSettings(settings);
+                WriteSettings(request);
             }
 
             var result = await copyService.ExecuteAsync(request);
@@ -37,23 +37,24 @@ public static class CopyCommand
             return result.Success ? 0 : 1;
         }
 
-        private void WriteSettings(Settings settings)
+        private void WriteSettings(CopyRequest request)
         {
             var table = new Table();
             table.AddColumn("Argument");
             table.AddColumn("Value");
             table.Border(TableBorder.Simple);
 
-            table.AddRow("Source".AsHeaderMarkup(), settings.Source.AsMarkup());
-            table.AddRow("Destination".AsHeaderMarkup(), settings.Destination.AsMarkup());
-            table.AddRow("No recursive".AsHeaderMarkup(), settings.NoRecursive.AsMarkup());
-            table.AddRow("No overwrite".AsHeaderMarkup(), settings.NoOverwrite.AsMarkup());
+            table.AddRow("Source".AsHeaderMarkup(), request.Source.FullName.AsMarkup());
+            table.AddRow("Destination".AsHeaderMarkup(), request.Destination.FullName.AsMarkup());
+
+            table.AddRow("Recursive".AsHeaderMarkup(), request.Recursive.AsMarkup());
+            table.AddRow("Overwrite".AsHeaderMarkup(), request.Overwrite.ToString().AsMarkup());
             table.AddRow(
-                "No create directories".AsHeaderMarkup(),
-                settings.NoCreateDirectories.AsMarkup()
+                "Create directories".AsHeaderMarkup(),
+                request.CreateDirectories.AsMarkup()
             );
-            table.AddRow("Dry run".AsHeaderMarkup(), settings.DryRun.AsMarkup());
-            table.AddRow("Verbose".AsHeaderMarkup(), settings.Verbose.AsMarkup());
+            table.AddRow("Dry run".AsHeaderMarkup(), request.DryRun.AsMarkup());
+            table.AddRow("Verbose".AsHeaderMarkup(), request.Verbose.AsMarkup());
 
             console.Write(table);
         }
@@ -70,6 +71,9 @@ public static class CopyCommand
         [CommandOption("--no-recursive")]
         public bool? NoRecursive { get; init; }
 
+        [CommandOption("-p|--prompt-overwrite")]
+        public bool? PromptOverwrite { get; init; }
+
         [CommandOption("--no-overwrite")]
         public bool? NoOverwrite { get; init; }
 
@@ -84,85 +88,111 @@ public static class CopyCommand
 
         public override ValidationResult Validate()
         {
-            var sourceType = Source.GetPathType();
+            var (sourceType, message) = ValidateSource();
 
-            switch (sourceType)
-            {
-                case PathType.File:
-                case PathType.Directory:
-                    break;
-                case PathType.Inaccessible:
-                    return ValidationResult.Error($"Source '{Source}' is inaccessible.");
-                case PathType.MissingFile:
-                    return ValidationResult.Error($"Source '{Source}' is a missing file.");
-                case PathType.MissingDirectory:
-                    return ValidationResult.Error($"Source '{Source}' is a missing directory.");
-                case PathType.Unexpected:
-                default:
-                    return ValidationResult.Error(
-                        $"Source '{Source}' is neither a file nor a directory."
-                    );
-            }
+            if (message is not null)
+                return ValidationResult.Error(message);
 
-            if (Destination is not null)
-            {
-                switch (Destination.GetPathType())
-                {
-                    case PathType.File:
-                        if (sourceType == PathType.Directory)
-                        {
-                            return ValidationResult.Error(
-                                $"Source '{Source}' is a directory, but destination '{Destination}' is a file."
-                            );
-                        }
+            message = ValidateDestination(sourceType);
 
-                        break;
+            if (message is not null)
+                return ValidationResult.Error(message);
 
-                    case PathType.Directory:
-                        break;
-                    case PathType.Inaccessible:
-                        return ValidationResult.Error(
-                            $"Destination '{Destination}' is inaccessible."
-                        );
-                    case PathType.MissingDirectory:
-                        return ValidationResult.Error(
-                            $"Destination '{Destination}' is a missing directory."
-                        );
-                    case PathType.MissingFile:
-                        return ValidationResult.Error(
-                            $"Destination '{Destination}' is a missing file."
-                        );
-                    case PathType.Unexpected:
-                    default:
-                        return ValidationResult.Error(
-                            $"Destination '{Destination}' is neither a file nor a directory."
-                        );
-                }
-            }
+            message = ValidateOverwrite();
+
+            if (message is not null)
+                return ValidationResult.Error(message);
 
             return ValidationResult.Success();
         }
-    }
 
-    internal static CopyRequest MapToRequest(this Settings settings)
-    {
-        var sourceType = settings.Source.GetPathType();
-        FileSystemInfoBase source = sourceType switch
+        private (PathType sourceType, string? errorMessage) ValidateSource()
         {
-            PathType.File => new FileInfoWrapper(new FileInfo(settings.Source)),
-            PathType.Directory => new DirectoryInfoWrapper(new DirectoryInfo(settings.Source)),
-            _ => throw new InvalidOperationException($"Unexpected source type: {sourceType}"),
-        };
+            return Source.GetFileSystemInfoAndType() switch
+            {
+                (not null, var t and (PathType.File or PathType.Directory)) => (t, null),
 
-        return new CopyRequest
+                (not null, PathType.MissingFile) => (
+                    PathType.MissingFile,
+                    $"Source '{Source}' is a missing file."
+                ),
+
+                (not null, PathType.MissingDirectory) => (
+                    PathType.MissingDirectory,
+                    $"Source '{Source}' is a missing directory."
+                ),
+
+                (null, PathType.Inaccessible) => (
+                    PathType.Inaccessible,
+                    $"Source '{Source}' is inaccessible."
+                ),
+
+                _ => (PathType.Unexpected, $"Source '{Source}' is neither a file nor a directory."),
+            };
+        }
+
+        private string? ValidateDestination(PathType sourceType)
         {
-            Source = source,
-            Destination = settings.Destination,
-            Verbose = settings.Verbose ?? false,
-            DryRun = settings.DryRun ?? false,
-            CreateDirectories = !(settings.NoCreateDirectories ?? false),
-            Overwrite = !(settings.NoOverwrite ?? false),
-            Recursive = !(settings.NoRecursive ?? false),
-        };
+            return Destination?.GetFileSystemInfoAndType(sourceType) switch
+            {
+                (not null, PathType.Directory or PathType.MissingDirectory) => null,
+
+                (not null, PathType.File or PathType.MissingFile)
+                    when sourceType == PathType.Directory =>
+                    $"Source '{Source}' is a directory but destination '{Destination}' is a file.",
+
+                (not null, PathType.File or PathType.MissingFile) => null,
+
+                (null, PathType.Inaccessible) => $"Destination '{Destination}' is inaccessible.",
+
+                _ => $"Destination '{Destination}' is neither a file nor a directory.",
+            };
+        }
+
+        private string? ValidateOverwrite()
+        {
+            return (PromptOverwrite, NoOverwrite) switch
+            {
+                (true, true) => "Cannot use both --prompt-overwrite and --no-overwrite.",
+                _ => null,
+            };
+        }
+
+        internal CopyRequest MapToRequest()
+        {
+            var (sourceInfo, sourceType) = Source.GetFileSystemInfoAndType();
+            Guard.IsNotNull(sourceInfo);
+            Guard.IsTrue(sourceType is PathType.File or PathType.Directory);
+
+            var (destinationInfo, destinationType) = (
+                Destination ?? Source
+            ).GetFileSystemInfoAndType(sourceType);
+            Guard.IsNotNull(destinationInfo);
+            Guard.IsTrue(
+                destinationType
+                    is PathType.File
+                        or PathType.Directory
+                        or PathType.MissingFile
+                        or PathType.MissingDirectory
+            );
+
+            var overwrite = (PromptOverwrite, NoOverwrite) switch
+            {
+                (true, _) => OverwriteMode.Prompt,
+                (_, true) => OverwriteMode.Never,
+                _ => OverwriteMode.Always,
+            };
+
+            return new CopyRequest
+            {
+                Source = sourceInfo,
+                Destination = destinationInfo,
+                Verbose = Verbose ?? false,
+                DryRun = DryRun ?? false,
+                CreateDirectories = !(NoCreateDirectories ?? false),
+                Overwrite = overwrite,
+                Recursive = !(NoRecursive ?? false),
+            };
+        }
     }
 }

@@ -1,4 +1,6 @@
-﻿namespace Gener8.Core;
+﻿using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
+
+namespace Gener8.Core;
 
 public static class FileSystemExtensions
 {
@@ -40,6 +42,46 @@ public static class FileSystemExtensions
         {
             return PathType.Inaccessible;
         }
+    }
+
+    public static FileSystemInfoBase GetFileSystemInfo(
+        this string path,
+        PathType? missingType = null
+    )
+    {
+        return GetFileSystemInfoAndType(path, missingType) switch
+        {
+            ({ } info, _) => info,
+
+            var (_, t) => throw new InvalidOperationException($"Unexpected type {t} for '{path}'"),
+        };
+    }
+
+    public static (FileSystemInfoBase? Info, PathType Type) GetFileSystemInfoAndType(
+        this string path,
+        PathType? missingType = null
+    )
+    {
+        var pathType = path.GetPathType();
+
+        return pathType switch
+        {
+            PathType.File => (new FileInfoWrapper(new FileInfo(path)), pathType),
+
+            PathType.Directory => (new DirectoryInfoWrapper(new DirectoryInfo(path)), pathType),
+
+            PathType.MissingFile or PathType.MissingDirectory => missingType switch
+            {
+                PathType.File => (new FileInfoWrapper(new FileInfo(path)), PathType.MissingFile),
+                PathType.Directory => (
+                    new DirectoryInfoWrapper(new DirectoryInfo(path)),
+                    PathType.MissingDirectory
+                ),
+                _ => (null, pathType),
+            },
+
+            _ => (null, pathType),
+        };
     }
 }
 

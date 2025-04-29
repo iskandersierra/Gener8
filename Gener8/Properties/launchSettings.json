@@ -2,7 +2,8 @@
   "profiles": {
     "Gener8": {
       "commandName": "Project",
-      "commandLineArgs": "cp"
+      "commandLineArgs": "cp .\\. ..\\out -p --verbose --dry-run",
+      "workingDirectory": "E:\\source\\Tools\\Gener8"
     }
   }
 }
