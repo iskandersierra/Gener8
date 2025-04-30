@@ -7,8 +7,6 @@ public static class FileSystemExtensions
     /// <summary>
     /// From: https://stackoverflow.com/questions/1395205/better-way-to-check-if-a-path-is-a-file-or-a-directory#79350289
     /// </summary>
-    /// <param name="path"></param>
-    /// <returns></returns>
     public static PathType GetPathType(this string path)
     {
         try
@@ -44,10 +42,7 @@ public static class FileSystemExtensions
         }
     }
 
-    public static FileSystemInfoBase GetFileSystemInfo(
-        this string path,
-        PathType? missingType = null
-    )
+    public static FileSystemInfo GetFileSystemInfo(this string path, PathType? missingType = null)
     {
         return GetFileSystemInfoAndType(path, missingType) switch
         {
@@ -57,7 +52,7 @@ public static class FileSystemExtensions
         };
     }
 
-    public static (FileSystemInfoBase? Info, PathType Type) GetFileSystemInfoAndType(
+    public static (FileSystemInfo? Info, PathType Type) GetFileSystemInfoAndType(
         this string path,
         PathType? missingType = null
     )
@@ -66,17 +61,14 @@ public static class FileSystemExtensions
 
         return pathType switch
         {
-            PathType.File => (new FileInfoWrapper(new FileInfo(path)), pathType),
+            PathType.File => (new FileInfo(path), pathType),
 
-            PathType.Directory => (new DirectoryInfoWrapper(new DirectoryInfo(path)), pathType),
+            PathType.Directory => (new DirectoryInfo(path), pathType),
 
             PathType.MissingFile or PathType.MissingDirectory => missingType switch
             {
-                PathType.File => (new FileInfoWrapper(new FileInfo(path)), PathType.MissingFile),
-                PathType.Directory => (
-                    new DirectoryInfoWrapper(new DirectoryInfo(path)),
-                    PathType.MissingDirectory
-                ),
+                PathType.File => (new FileInfo(path), PathType.MissingFile),
+                PathType.Directory => (new DirectoryInfo(path), PathType.MissingDirectory),
                 _ => (null, pathType),
             },
 

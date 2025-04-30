@@ -46,6 +46,8 @@ public static class CopyCommand
 
             table.AddRow("Source".AsHeaderMarkup(), request.Source.FullName.AsMarkup());
             table.AddRow("Destination".AsHeaderMarkup(), request.Destination.FullName.AsMarkup());
+            table.AddRow("Include".AsHeaderMarkup(), string.Join(", ", request.Include).AsMarkup());
+            table.AddRow("Exclude".AsHeaderMarkup(), string.Join(", ", request.Exclude).AsMarkup());
 
             table.AddRow("Recursive".AsHeaderMarkup(), request.Recursive.AsMarkup());
             table.AddRow("Overwrite".AsHeaderMarkup(), request.Overwrite.ToString().AsMarkup());
@@ -85,6 +87,12 @@ public static class CopyCommand
 
         [CommandOption("--verbose")]
         public bool? Verbose { get; init; }
+
+        [CommandOption("-i|--include")]
+        public string[] Include { get; init; } = [];
+
+        [CommandOption("-x|--exclude")]
+        public string[] Exclude { get; init; } = [];
 
         public override ValidationResult Validate()
         {
@@ -192,6 +200,8 @@ public static class CopyCommand
                 CreateDirectories = !(NoCreateDirectories ?? false),
                 Overwrite = overwrite,
                 Recursive = !(NoRecursive ?? false),
+                Include = Include.AsEnumerable(),
+                Exclude = Exclude.AsEnumerable(),
             };
         }
     }
