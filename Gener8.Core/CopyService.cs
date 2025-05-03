@@ -1,7 +1,6 @@
-﻿using System.Security.AccessControl;
+﻿using System.Text.RegularExpressions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileSystemGlobbing;
-using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
 using Spectre.Console;
 
 namespace Gener8.Core;
@@ -18,6 +17,12 @@ public enum OverwriteMode
     Always,
 }
 
+public enum ReplaceMode
+{
+    Plain,
+    Regex,
+}
+
 public class CopyRequest
 {
     public required FileSystemInfo Source { get; init; }
@@ -26,17 +31,20 @@ public class CopyRequest
     public required bool Recursive { get; init; }
     public required OverwriteMode Overwrite { get; init; }
     public required bool CreateDirectories { get; init; }
+    public required bool ReplaceContent { get; init; }
+    public required bool ReplaceNames { get; init; }
     public required bool DryRun { get; init; }
     public required bool Verbose { get; init; }
 
-    public required IEnumerable<string> Include { get; init; }
-    public required IEnumerable<string> Exclude { get; init; }
+    public required ILookup<string, string> Replace { get; init; }
+    public required string? Encoding { get; init; }
+    public required ReplaceMode ReplaceMode { get; init; }
+
+    public required IReadOnlyCollection<string> Include { get; init; }
+    public required IReadOnlyCollection<string> Exclude { get; init; }
 }
 
-public class CopyResult
-{
-    public required bool Success { get; init; }
-}
+public record CopyResult(bool Success);
 
 public record CopyOperationDescription();
 
@@ -49,12 +57,18 @@ public class CopyService(IAnsiConsole console) : ICopyService
     {
         var matcher = new Matcher();
 
-        matcher.AddInclude("**/*");
-
-        foreach (var include in request.Include)
+        if (request.Include.Count == 0)
         {
-            matcher.AddInclude(include);
+            matcher.AddInclude("**/*");
         }
+        else
+        {
+            foreach (var include in request.Include)
+            {
+                matcher.AddInclude(include);
+            }
+        }
+
         foreach (var exclude in request.Exclude)
         {
             matcher.AddExclude(exclude);
@@ -62,39 +76,36 @@ public class CopyService(IAnsiConsole console) : ICopyService
 
         var ensuredDirectories = new HashSet<string>();
 
-        await Loop(request.Source, request.Destination);
+        return await Loop(request.Source, request.Destination);
 
-        return new() { Success = false };
-
-        async Task Loop(FileSystemInfo fromInfo, FileSystemInfo toInfo)
+        async Task<CopyResult> Loop(FileSystemInfo fromInfo, FileSystemInfo toInfo)
         {
-            if (fromInfo is FileInfo fromFile)
+            switch (fromInfo, toInfo)
             {
-                if (toInfo is FileInfo toFile)
+                case (FileInfo fromFile, FileInfo toFile):
                 {
-                    if (matcher.Match(fromFile.FullName).HasMatches)
-                    {
-                        await CopyFile(fromFile, toFile);
-                    }
+                    await CopyFile(fromFile, toFile);
+                    return new CopyResult(true);
                 }
-                else if (toInfo is DirectoryInfo toDir)
+
+                case (FileInfo fromFile, DirectoryInfo toDir):
                 {
-                    if (matcher.Match(fromFile.FullName).HasMatches)
-                    {
-                        toFile = new FileInfo(Path.Combine(toDir.FullName, fromFile.Name));
-                        await CopyFile(fromFile, toFile);
-                    }
+                    var toFile = new FileInfo(
+                        Path.Combine(toDir.FullName, ReplaceName(fromFile.Name))
+                    );
+                    await CopyFile(fromFile, toFile);
+                    return new CopyResult(true);
                 }
-            }
-            else if (fromInfo is DirectoryInfo fromDir)
-            {
-                if (toInfo is FileInfo toFile)
+
+                case (DirectoryInfo fromDir, FileInfo toFile):
                 {
                     console.MarkupInterpolated(
-                        $"[red]Cannot copy directory [cyan]{fromDir.FullName}[/] to file [cyan]{toFile.FullName}[/]\n"
+                        $"[red]Cannot copy directory [cyan]{fromDir.FullName}[/] to file [cyan]{toFile.FullName}[/][/]\n"
                     );
+                    return new CopyResult(false);
                 }
-                else if (toInfo is DirectoryInfo toDir)
+
+                case (DirectoryInfo fromDir, DirectoryInfo toDir):
                 {
                     var fileMatches = matcher.Match(fromDir.GetFiles().Select(e => e.FullName));
 
@@ -102,9 +113,9 @@ public class CopyService(IAnsiConsole console) : ICopyService
                     {
                         foreach (var match in fileMatches.Files)
                         {
-                            fromFile = new FileInfo(match.Path);
+                            var fromFile = new FileInfo(match.Path);
                             var toChildFile = new FileInfo(
-                                Path.Combine(toDir.FullName, fromFile.Name)
+                                Path.Combine(toDir.FullName, ReplaceName(fromFile.Name))
                             );
                             await Loop(fromFile, toChildFile);
                         }
@@ -120,12 +131,21 @@ public class CopyService(IAnsiConsole console) : ICopyService
                         {
                             fromDir = new DirectoryInfo(matches.Path);
                             var toChildDir = new DirectoryInfo(
-                                Path.Combine(toDir.FullName, fromDir.Name)
+                                Path.Combine(toDir.FullName, ReplaceName(fromDir.Name))
                             );
                             await Loop(fromDir, toChildDir);
                         }
                     }
+
+                    return new CopyResult(true);
                 }
+
+                default:
+                    console.MarkupInterpolated(
+                        $"[red]Cannot copy [cyan]{fromInfo.FullName}[/] to [cyan]{toInfo.FullName}[/][/]\n"
+                    );
+
+                    return new CopyResult(false);
             }
         }
 
@@ -181,6 +201,11 @@ public class CopyService(IAnsiConsole console) : ICopyService
                 );
             }
 
+            if (!request.DryRun)
+            {
+                File.Copy(fromFile.FullName, toFile.FullName);
+            }
+
             await Task.Yield();
         }
 
@@ -214,6 +239,32 @@ public class CopyService(IAnsiConsole console) : ICopyService
             await Task.Yield();
 
             return true;
+        }
+
+        string ReplaceName(string name)
+        {
+            if (!request.ReplaceNames)
+            {
+                return name;
+            }
+
+            foreach (var group in request.Replace)
+            {
+                var key = group.Key;
+                var value = group.First();
+
+                switch (request.ReplaceMode)
+                {
+                    case ReplaceMode.Plain:
+                        name = name.Replace(key, value);
+                        break;
+                    case ReplaceMode.Regex:
+                        name = Regex.Replace(name, key, value);
+                        break;
+                }
+            }
+
+            return name;
         }
     }
 }

@@ -27,6 +27,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Gener8.Core\Gener8.Core.csproj" />
+    <ProjectReference Include="..\Gener8.Core.Tests\Gener8.Core.Tests.csproj" />
   </ItemGroup>
 
   <ItemGroup>

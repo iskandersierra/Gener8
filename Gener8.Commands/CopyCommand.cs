@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics;
+using System.Xml.Linq;
 using CommunityToolkit.Diagnostics;
 using Gener8.Core;
 using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
@@ -65,34 +66,49 @@ public static class CopyCommand
     public class Settings : TemplateBranch.Settings
     {
         [CommandArgument(0, "<source>")]
-        public required string Source { get; init; }
+        public required string Source { get; set; }
 
         [CommandArgument(1, "[destination]")]
-        public string? Destination { get; init; }
+        public string? Destination { get; set; }
 
         [CommandOption("--no-recursive")]
-        public bool? NoRecursive { get; init; }
+        public bool? NoRecursive { get; set; }
 
         [CommandOption("-p|--prompt-overwrite")]
-        public bool? PromptOverwrite { get; init; }
+        public bool? PromptOverwrite { get; set; }
 
         [CommandOption("--no-overwrite")]
-        public bool? NoOverwrite { get; init; }
+        public bool? NoOverwrite { get; set; }
 
         [CommandOption("--no-create-directories")]
-        public bool? NoCreateDirectories { get; init; }
+        public bool? NoCreateDirectories { get; set; }
+
+        [CommandOption("--no-replace-content")]
+        public bool? NoReplaceContent { get; set; }
+
+        [CommandOption("--no-replace-names")]
+        public bool? NoReplaceNames { get; set; }
 
         [CommandOption("--dry-run")]
-        public bool? DryRun { get; init; }
+        public bool? DryRun { get; set; }
 
         [CommandOption("--verbose")]
-        public bool? Verbose { get; init; }
+        public bool? Verbose { get; set; }
 
         [CommandOption("-i|--include")]
-        public string[] Include { get; init; } = [];
+        public string[] Include { get; set; } = [];
 
         [CommandOption("-x|--exclude")]
-        public string[] Exclude { get; init; } = [];
+        public string[] Exclude { get; set; } = [];
+
+        [CommandOption("--encoding")]
+        public string? Encoding { get; set; }
+
+        [CommandOption("--regex")]
+        public bool? Regex { get; set; }
+
+        [CommandOption("-r|--replace")]
+        public ILookup<string, string>? Replace { get; set; }
 
         public override ValidationResult Validate()
         {
@@ -107,6 +123,16 @@ public static class CopyCommand
                 return ValidationResult.Error(message);
 
             message = ValidateOverwrite();
+
+            if (message is not null)
+                return ValidationResult.Error(message);
+
+            message = ValidateEncoding();
+
+            if (message is not null)
+                return ValidationResult.Error(message);
+
+            message = ValidateReplace();
 
             if (message is not null)
                 return ValidationResult.Error(message);
@@ -166,6 +192,56 @@ public static class CopyCommand
             };
         }
 
+        private string? ValidateEncoding()
+        {
+            if (Encoding is { } encoding)
+            {
+                if (int.TryParse(encoding, out var codepage))
+                {
+                    try
+                    {
+                        _ = System.Text.Encoding.GetEncoding(codepage);
+                        return null;
+                    }
+                    catch (Exception e)
+                    {
+                        return e.Message;
+                    }
+                }
+
+                try
+                {
+                    _ = System.Text.Encoding.GetEncoding(encoding);
+                }
+                catch (Exception e)
+                {
+                    return e.Message;
+                }
+            }
+
+            return null;
+        }
+
+        private string? ValidateReplace()
+        {
+            if (Replace is null)
+            {
+                Replace = Array.Empty<string>().ToLookup(e => e);
+            }
+            else
+            {
+                foreach (var group in Replace)
+                {
+                    if (group.Count() > 1)
+                    {
+                        return $"Replace key '{group.Key}' has more than one replacement value.";
+                    }
+                }
+            }
+
+            return null;
+        }
+
         internal CopyRequest MapToRequest()
         {
             var (sourceInfo, sourceType) = Source.GetFileSystemInfoAndType();
@@ -191,6 +267,8 @@ public static class CopyCommand
                 _ => OverwriteMode.Always,
             };
 
+            var replaceMode = Regex ?? false ? ReplaceMode.Regex : ReplaceMode.Plain;
+
             return new CopyRequest
             {
                 Source = sourceInfo,
@@ -200,8 +278,13 @@ public static class CopyCommand
                 CreateDirectories = !(NoCreateDirectories ?? false),
                 Overwrite = overwrite,
                 Recursive = !(NoRecursive ?? false),
-                Include = Include.AsEnumerable(),
-                Exclude = Exclude.AsEnumerable(),
+                ReplaceContent = !(NoReplaceContent ?? false),
+                ReplaceNames = !(NoReplaceNames ?? false),
+                Encoding = Encoding,
+                Replace = Replace!,
+                ReplaceMode = replaceMode,
+                Include = Include.AsReadOnly(),
+                Exclude = Exclude.AsReadOnly(),
             };
         }
     }

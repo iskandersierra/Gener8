@@ -1,0 +1,2 @@
+﻿Creating directory {TempPath}h4e56_file_directory\destination
+Copying {TempPath}h4e56_file_directory\source\first.txt to {TempPath}h4e56_file_directory\destination\first.txt
