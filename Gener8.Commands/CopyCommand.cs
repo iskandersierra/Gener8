@@ -51,13 +51,28 @@ public static class CopyCommand
             table.AddRow("Exclude".AsHeaderMarkup(), string.Join(", ", request.Exclude).AsMarkup());
 
             table.AddRow("Recursive".AsHeaderMarkup(), request.Recursive.AsMarkup());
+            table.AddRow("Ignore case".AsHeaderMarkup(), request.IgnoreCase.AsMarkup());
+            table.AddRow("Replace names".AsHeaderMarkup(), request.ReplaceNames.AsMarkup());
+            table.AddRow("Replace content".AsHeaderMarkup(), request.ReplaceContent.AsMarkup());
             table.AddRow("Overwrite".AsHeaderMarkup(), request.Overwrite.ToString().AsMarkup());
+            table.AddRow(
+                "Replace mode".AsHeaderMarkup(),
+                request.ReplaceMode.ToString().AsMarkup()
+            );
             table.AddRow(
                 "Create directories".AsHeaderMarkup(),
                 request.CreateDirectories.AsMarkup()
             );
+            table.AddRow("Encoding".AsHeaderMarkup(), request.Encoding.AsMarkup());
             table.AddRow("Dry run".AsHeaderMarkup(), request.DryRun.AsMarkup());
             table.AddRow("Verbose".AsHeaderMarkup(), request.Verbose.AsMarkup());
+            foreach (var group in request.Replace)
+            {
+                table.AddRow(
+                    "Replace".AsHeaderMarkup(),
+                    $"{group.Key} => {group.First()}".AsMarkup()
+                );
+            }
 
             console.Write(table);
         }
@@ -94,6 +109,9 @@ public static class CopyCommand
 
         [CommandOption("--verbose")]
         public bool? Verbose { get; set; }
+
+        [CommandOption("--ignore-case")]
+        public bool? IgnoreCase { get; set; }
 
         [CommandOption("-i|--include")]
         public string[] Include { get; set; } = [];
@@ -280,6 +298,7 @@ public static class CopyCommand
                 Recursive = !(NoRecursive ?? false),
                 ReplaceContent = !(NoReplaceContent ?? false),
                 ReplaceNames = !(NoReplaceNames ?? false),
+                IgnoreCase = IgnoreCase ?? false,
                 Encoding = Encoding,
                 Replace = Replace!,
                 ReplaceMode = replaceMode,

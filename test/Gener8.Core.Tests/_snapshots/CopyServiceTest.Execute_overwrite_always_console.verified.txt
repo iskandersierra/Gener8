@@ -1,0 +1,2 @@
+﻿Overwriting {TempPath}h4e56_overwrite_always\source\first.txt to {TempPath}h4e56_overwrite_always\destination\first.txt
+Copying {TempPath}h4e56_overwrite_always\source\second.txt to {TempPath}h4e56_overwrite_always\destination\second.txt

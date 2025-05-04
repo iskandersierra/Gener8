@@ -1,0 +1,6 @@
+﻿Creating directory {TempPath}h4e56_encoding\destination
+Copying {TempPath}h4e56_encoding\source\ascii.txt to {TempPath}h4e56_encoding\destination\ascii.txt
+Copying {TempPath}h4e56_encoding\source\unicode.txt to {TempPath}h4e56_encoding\destination\unicode.txt
+Copying {TempPath}h4e56_encoding\source\utf32.txt to {TempPath}h4e56_encoding\destination\utf32.txt
+Copying {TempPath}h4e56_encoding\source\utf8-bom.txt to {TempPath}h4e56_encoding\destination\utf8-bom.txt
+Copying {TempPath}h4e56_encoding\source\utf8-no-bom.txt to {TempPath}h4e56_encoding\destination\utf8-no-bom.txt

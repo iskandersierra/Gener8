@@ -1,0 +1,4 @@
+﻿Creating directory {TempPath}h4e56_recursive\destination
+Copying {TempPath}h4e56_recursive\source\first.txt to {TempPath}h4e56_recursive\destination\first.txt
+Creating directory {TempPath}h4e56_recursive\destination\children
+Copying {TempPath}h4e56_recursive\source\children\second.cs to {TempPath}h4e56_recursive\destination\children\second.cs

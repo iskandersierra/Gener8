@@ -1,6 +1,4 @@
-﻿using Microsoft.Extensions.FileSystemGlobbing.Abstractions;
-
-namespace Gener8.Core;
+﻿namespace Gener8.Core;
 
 public static class FileSystemExtensions
 {

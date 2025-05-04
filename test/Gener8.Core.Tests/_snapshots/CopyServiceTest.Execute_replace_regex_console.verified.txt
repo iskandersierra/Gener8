@@ -1,0 +1,3 @@
+﻿Creating directory {TempPath}h4e56_replace_regex\destination
+Copying {TempPath}h4e56_replace_regex\source\Archivo01.txt to {TempPath}h4e56_replace_regex\destination\Archivo_01.txt
+Copying {TempPath}h4e56_replace_regex\source\Sample_10.txt to {TempPath}h4e56_replace_regex\destination\Sample_10.txt

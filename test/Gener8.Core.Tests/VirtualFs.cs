@@ -12,8 +12,15 @@ public readonly struct VirtualFs : IAsyncDisposable
 
     public VirtualFs(string name)
     {
-        var directory = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), name));
-        rootPath = directory.FullName;
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Name cannot be null or empty.", nameof(name));
+        var tempPath = Path.GetTempPath();
+        var path = Path.Combine(tempPath, name);
+        if (Path.GetRelativePath(tempPath, path).Contains(".."))
+            throw new ArgumentException("Name cannot contain path separators.", nameof(name));
+        if (Directory.Exists(path))
+            Directory.Delete(path, true);
+        rootPath = Directory.CreateDirectory(path).FullName;
         Directory.CreateDirectory(rootPath);
     }
 

@@ -1,0 +1,2 @@
+﻿Skipping {TempPath}h4e56_overwrite_never\destination\first.txt (overwrite never)
+Copying {TempPath}h4e56_overwrite_never\source\second.txt to {TempPath}h4e56_overwrite_never\destination\second.txt
